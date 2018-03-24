@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-var sizeRegex = regexp.MustCompile("([1-9][0-9]*)x([1-9][0-9]*)")
+var sizeRegex = regexp.MustCompile("^([1-9][0-9]*)x([1-9][0-9]*)$")
 var colorRegex = []*regexp.Regexp{
 	regexp.MustCompile("^([0-9a-f][0-9a-f])([0-9a-f][0-9a-f])([0-9a-f][0-9a-f])$"),
 	regexp.MustCompile("^([0-9a-f])([0-9a-f])([0-9a-f])$"),
@@ -30,62 +30,55 @@ func main() {
 
 	input, err := getInput(file)
 	if err != nil {
+		fmt.Printf("error: %s\n\n", err)
 		flag.Usage()
-		exitf(err.Error())
+		os.Exit(1)
 	}
-
-	s := sizeRegex.FindStringSubmatch(size)
-	if len(s) != 3 {
-		exitf("Failed to parse size %s\n", size)
-	}
-	var width, height int
-	if width, err = strconv.Atoi(s[1]); err != nil {
-		exitf("Failed to parse width %s", s[1])
-	}
-	if height, err = strconv.Atoi(s[2]); err != nil {
-		exitf("Failed to parse height %s", s[1])
-	}
-	fmt.Printf("Width: %dpx\nHeight: %dpx\n", width, height)
-
 	defer input.Close()
-	generateImages(input, width, height)
-}
 
-func generateImages(input io.Reader, width, height int) {
+	s, err := parseSize(size)
+	if err != nil {
+		fmt.Printf("error: %s\n\n", err)
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	var count int
 	scanner := bufio.NewScanner(input)
 	scanner.Split(bufio.ScanLines)
 	for scanner.Scan() {
-		generateImage(scanner.Text(), width, height)
+		hex := strings.TrimLeft(scanner.Text(), "#")
+		if err := generateImage(hex, s); err != nil {
+			fmt.Printf("Skipping %q due to error %s\n", hex, err)
+			continue
+		}
+		count++
 	}
+	fmt.Printf("Generated %d images. Done!\n", count)
 }
 
-func generateImage(rawHex string, width, height int) {
-	hex := strings.TrimLeft(rawHex, "#")
+func generateImage(hex string, s Size) error {
 	c, err := parseHex(hex)
 	if err != nil {
-		fmt.Printf("Skipping %q due to error %s\n", hex, err)
-		return
+		return err
 	}
-	img := image.NewRGBA(image.Rect(0, 0, width, height))
-	for x := 0; x < width; x++ {
-		for y := 0; y < height; y++ {
+	img := image.NewRGBA(image.Rect(0, 0, s.Width, s.Height))
+	for x := 0; x < s.Width; x++ {
+		for y := 0; y < s.Height; y++ {
 			img.Set(x, y, c)
 		}
 	}
-	filename := fmt.Sprintf("%s.png", c.hex)
-	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0644)
-	defer f.Close()
+	f, err := os.OpenFile(fmt.Sprintf("%s.png", c.Name), os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
-		fmt.Printf("Skipping %q due to error %s\n", hex, err)
-		return
+		return err
 	}
-	png.Encode(f, img)
-	fmt.Printf("% 7s > %s\n", rawHex, filename)
+	defer f.Close()
+	return png.Encode(f, img)
 }
 
 type Hex struct {
 	color.Color
-	hex string
+	Name string
 }
 
 func parseHex(hex string) (Hex, error) {
@@ -112,8 +105,28 @@ func parseHex(hex string) (Hex, error) {
 	}
 	return Hex{
 		Color: color.RGBA{ints[0], ints[1], ints[2], 255},
-		hex:   strings.Join(strs, ""),
+		Name:  strings.Join(strs, ""),
 	}, nil
+}
+
+type Size struct {
+	Width, Height int
+}
+
+func parseSize(size string) (Size, error) {
+	s := sizeRegex.FindStringSubmatch(size)
+	if len(s) != 3 {
+		return Size{}, errors.New("parse: invalid size")
+	}
+	var w, h int
+	var err error
+	if w, err = strconv.Atoi(s[1]); err != nil {
+		return Size{}, err
+	}
+	if h, err = strconv.Atoi(s[2]); err != nil {
+		return Size{}, err
+	}
+	return Size{w, h}, nil
 }
 
 func getInput(file string) (io.ReadCloser, error) {
@@ -122,7 +135,6 @@ func getInput(file string) (io.ReadCloser, error) {
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("Reading from file %s\n", file)
 		return f, nil
 	}
 
@@ -134,11 +146,5 @@ func getInput(file string) (io.ReadCloser, error) {
 		return nil, errors.New("Pipe input is invalid")
 	}
 
-	fmt.Printf("Reading from stdin\n")
 	return ioutil.NopCloser(bufio.NewReader(os.Stdin)), nil
-}
-
-func exitf(template string, args ...interface{}) {
-	fmt.Printf(fmt.Sprintf("error: %s\n", template), args...)
-	os.Exit(1)
 }
