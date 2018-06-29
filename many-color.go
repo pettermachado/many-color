@@ -88,10 +88,10 @@ type Hex struct {
 	Name string
 }
 
-func parseHex(hex string) (Hex, error) {
+func parseHex(str string) (Hex, error) {
 	var hexParts []string
 	for _, r := range colorRegex {
-		hexParts = r.FindStringSubmatch(hex)
+		hexParts = r.FindStringSubmatch(str)
 		if len(hexParts) == 4 {
 			break
 		}
@@ -120,8 +120,8 @@ type Size struct {
 	Width, Height int
 }
 
-func parseSize(size string) (Size, error) {
-	s := sizeRegex.FindStringSubmatch(size)
+func parseSize(str string) (Size, error) {
+	s := sizeRegex.FindStringSubmatch(str)
 	if len(s) != 3 {
 		return Size{}, errors.New("parse: invalid size")
 	}
