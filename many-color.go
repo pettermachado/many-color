@@ -34,7 +34,7 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
-	defer input.Close()
+	defer Close(input)
 
 	s, err := parseSize(size)
 	if err != nil {
@@ -72,8 +72,15 @@ func generateImage(hex string, s Size) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer Close(f)
 	return png.Encode(f, img)
+}
+
+func Close(c io.Closer) {
+	if err := c.Close(); err != nil {
+		fmt.Printf("fatal: %s", err)
+		os.Exit(1)
+	}
 }
 
 type Hex struct {
