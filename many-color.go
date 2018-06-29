@@ -149,9 +149,9 @@ func getInput(file string) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	if info.Mode()&os.ModeCharDevice != 0 || info.Size() <= 0 {
-		return nil, errors.New("Pipe input is invalid")
-	}
 
-	return ioutil.NopCloser(bufio.NewReader(os.Stdin)), nil
+	if info.Mode()&os.ModeNamedPipe != 0 {
+		return ioutil.NopCloser(bufio.NewReader(os.Stdin)), nil
+	}
+	return nil, errors.New("Pipe input is invalid")
 }
